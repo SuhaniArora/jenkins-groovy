@@ -4,7 +4,7 @@ job("kube1_groovy"){
     github('SuhaniArora/jenkins-container_kubernetes','master')
   }
   steps{
-    shell('sudo cp -vrf * /root/projects/jenkins')
+    shell('sudo cp -vrf * /projects/jenkins')
   }
   triggers{
     gitHubPushTrigger()
@@ -14,23 +14,23 @@ job("kube1_groovy"){
 job("kube2_groovy"){
   steps{
     shell('''
-	if sudo ls /root/projects/jenkins | grep php
+	if sudo ls /projects/jenkins | grep php
       	then
 		if sudo kubectl get deployment --selector "app in (httpd)" | grep httpd-web
     		then
-			sudo kubectl apply -f /root/projects/jenkins/webserver.yml
+			sudo kubectl apply -f /projects/jenkins/webserver.yml
            		POD=$(sudo kubectl get pod -l app=httpd -o jsonpath="{.items[0].metadata.name}")
         		echo $POD
-        		sudo kubectl cp /root/projects/jenkins/index.php $POD:/var/www/html
+        		sudo kubectl cp /projects/jenkins/index.php $POD:/var/www/html
 		else
     			if ! kubectl get pvc | grep httpdweb1-pv-claim
         		then
-            			sudo kubectl create -f /root/projects/jenkins/pvc.yml
+            			sudo kubectl create -f /projects/jenkins/pvc.yml
         		fi
-        		sudo kubectl create -f /root/projects/jenkins/webserver.yml
+        		sudo kubectl create -f /projects/jenkins/webserver.yml
         		POD=$(sudo kubectl get pod -l app=httpd -o jsonpath="{.items[0].metadata.name}")
         		echo $POD
-        		sudo kubectl cp /root/projects/jenkins/index.php $POD:/var/www/html
+        		sudo kubectl cp /projects/jenkins/index.php $POD:/var/www/html
     		fi
    	fi
 	''')
@@ -50,9 +50,7 @@ then
     echo "Running"
     exit 0
 else
-	pod_name=$(kubectl get pod -o='name' | grep jenkinsmaster )
-    pod_ip=$(kubectl get ${pod_name} --template={{.status.podIP}})
-    curl --user admin:redhat http://${pod_ip}:8080/job/j4/build?token=mail
+     exit 1
 fi
      ''')
   }
@@ -61,16 +59,23 @@ fi
         upstream('kube2_groovy', 'SUCCESS')
   }
   
-}
-
-job("kube4_groovy")
-{
-  steps{
-    shell(
-      'python3 /root/projects/jenkins/mail.py'
-    )
-  }
-   triggers {
-        upstream('kube3_groovy', 'UNSTABLE')
-  }
+  publishers {
+        extendedEmail {
+            recipientList('arorasuhani1511@gmail.com')
+            defaultSubject('Job status')
+          	attachBuildLog(attachBuildLog = true)
+            defaultContent('Status Report')
+            contentType('text/html')
+            triggers {
+                always {
+                    subject('build Status')
+                    content('Body')
+                    sendTo {
+                        developers()
+                        recipientList()
+                    }
+		}
+	    }
+	}
+    }
 }
